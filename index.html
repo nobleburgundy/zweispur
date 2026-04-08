@@ -393,6 +393,77 @@
       margin-top: 14px;
     }
 
+    /* ── FILENAME MODAL ── */
+    .fname-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 400;
+      display: none;
+      align-items: flex-end;
+    }
+    .fname-backdrop.visible { display: flex; }
+    .fname-panel {
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
+    }
+    .fname-heading {
+      padding: 14px 24px 12px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text3);
+      border-bottom: 1px solid var(--border);
+    }
+    .fname-body {
+      padding: 18px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .fname-ext {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--text3);
+      margin-top: 6px;
+    }
+    .fname-input {
+      width: 100%;
+      padding: 10px 0;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 16px;
+      letter-spacing: 0.04em;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    .fname-input:focus { border-bottom-color: var(--text); }
+    .fname-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .fname-action {
+      padding: 16px 0;
+      background: none;
+      border: none;
+      border-right: 1px solid var(--border);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text2);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .fname-action:last-child { border-right: none; }
+    .fname-action:active     { background: var(--bg2); }
+    .fname-action.confirm    { color: var(--text); }
+
     /* ── REC PULSE ── */
     @keyframes rpulse { 0%,100%{opacity:1} 50%{opacity:0.15} }
     .rpulse {
@@ -517,16 +588,6 @@
       width: 44px;
       height: 172px;
       flex-shrink: 0;
-    }
-    /* Unity-gain reference notch at 100% (top of throw) */
-    .vfader-wrap::before {
-      content: '';
-      position: absolute;
-      right: -8px;
-      top: 0;
-      width: 5px;
-      height: 2px;
-      background: var(--text3);
     }
     .vfader {
       position: absolute;
@@ -842,6 +903,23 @@
       <button class="tbn off" id="tbn-share" onclick="shareMix()">
         <span class="tbn-g">↑</span><span>SHARE</span>
       </button>
+    </div>
+  </div>
+
+  <!-- FILENAME MODAL -->
+  <div class="fname-backdrop" id="fname-backdrop">
+    <div class="fname-panel">
+      <div class="fname-heading">EXPORT FILE NAME</div>
+      <div class="fname-body">
+        <input class="fname-input" id="fname-input"
+               type="text" spellcheck="false" autocorrect="off" autocapitalize="off"
+               placeholder="zweispur-mix">
+        <div class="fname-ext">.mp3</div>
+      </div>
+      <div class="fname-actions">
+        <button class="fname-action" id="fname-cancel" onclick="resolveFname(null)">CANCEL</button>
+        <button class="fname-action confirm" id="fname-ok" onclick="resolveFname()">EXPORT</button>
+      </div>
     </div>
   </div>
 
@@ -1557,6 +1635,31 @@ function syncMixerUI() {
   });
 }
 
+// ── FILENAME PROMPT ───────────────────────────────────────────────────────────
+
+let _fnameResolve = null;
+
+function promptFilename(defaultName) {
+  return new Promise(resolve => {
+    _fnameResolve = resolve;
+    const input = document.getElementById('fname-input');
+    input.value = defaultName || '';
+    document.getElementById('fname-backdrop').classList.add('visible');
+    // Slight delay so the panel animates in before keyboard opens
+    setTimeout(() => input.focus(), 80);
+  });
+}
+
+function resolveFname(val) {
+  document.getElementById('fname-backdrop').classList.remove('visible');
+  document.getElementById('fname-input').blur();
+  if (!_fnameResolve) return;
+  const input = document.getElementById('fname-input');
+  const name  = (val === null) ? null : (input.value.trim() || 'zweispur-mix');
+  _fnameResolve(name);
+  _fnameResolve = null;
+}
+
 // ── SHARE / EXPORT ───────────────────────────────────────────────────────────
 
 // Lamejs loaded lazily on first share
@@ -1576,6 +1679,9 @@ function loadLame() {
 async function shareMix() {
   const t0 = S.tracks[0], t1 = S.tracks[1];
   if (!t0.buf && !t1.buf) return;
+
+  const filename = await promptFilename('zweispur-mix');
+  if (!filename) return;   // user cancelled
 
   const btn = document.getElementById('tbn-share');
   btn.style.opacity = '0.5';
@@ -1617,7 +1723,7 @@ async function shareMix() {
     // Yield to UI before blocking encode loop
     await sleep(0);
     const mp3Blob = encodeMp3(rendered);
-    const file    = new File([mp3Blob], 'zweispur-mix.mp3', { type: 'audio/mpeg' });
+    const file    = new File([mp3Blob], filename + '.mp3', { type: 'audio/mpeg' });
 
     setStatus('READY');
 
@@ -1626,7 +1732,7 @@ async function shareMix() {
     } else {
       // Desktop fallback: trigger download
       const url = URL.createObjectURL(file);
-      const a   = Object.assign(document.createElement('a'), { href: url, download: 'zweispur-mix.mp3' });
+      const a   = Object.assign(document.createElement('a'), { href: url, download: filename + '.mp3' });
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 8000);
     }
