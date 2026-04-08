@@ -447,77 +447,197 @@
     .cal-btn:active  { background: var(--bg2); }
     .cal-btn.running { color: var(--red); }
 
-    /* ── MIXER VIEW ── */
+    /* ── MIXER / CONSOLE VIEW ── */
     .mixer-view {
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
       display: none;
-      padding: 0 24px 32px;
+      flex-direction: column;
     }
-    .mixer-view.visible { display: block; }
+    .mixer-view.visible { display: flex; }
 
-    .mix-channel {
-      padding: 24px 0 20px;
-      border-bottom: 1px solid var(--border);
+    /* Two-column console desk */
+    .mix-desk {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+      border-top: 1px solid var(--border);
     }
-    .mix-head {
+    .mix-ch {
       display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      margin-bottom: 20px;
+      flex-direction: column;
+      align-items: center;
+      padding: 18px 12px 20px;
+      gap: 10px;
+      border-right: 1px solid var(--border);
     }
-    .mix-name {
-      font-size: 11px;
+    .mix-ch:last-child { border-right: none; }
+
+    /* Channel label strip */
+    .mix-ch-strip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      width: 100%;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .mix-ch-num {
+      font-size: 10px;
       letter-spacing: 0.16em;
+      color: var(--text3);
       text-transform: uppercase;
-      color: var(--text2);
     }
+    .mix-ch-name {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      color: var(--text2);
+      text-transform: uppercase;
+    }
+
+    /* dB readout */
     .mix-db {
-      font-size: 18px;
-      letter-spacing: 0.02em;
+      font-size: 15px;
+      letter-spacing: 0.03em;
       color: var(--text);
-      min-width: 72px;
-      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
     .mix-db.silent { color: var(--text3); }
 
-    /* Custom range — square thumb, filled track */
-    .mix-fader {
+    /* ── VERTICAL FADER ──
+       Technique: rotate a normal horizontal range -90deg inside a fixed wrapper.
+       Wrapper width = thumb area (44px), wrapper height = visual fader throw (172px).
+       Input width pre-rotation = 172px (= visual height), height = 44px (= visual width).
+       Offset math: top = (172-44)/2 = 64px, left = (44-172)/2 = -64px             */
+    .vfader-wrap {
+      position: relative;
+      width: 44px;
+      height: 172px;
+      flex-shrink: 0;
+    }
+    /* Unity-gain reference notch at 100% (top of throw) */
+    .vfader-wrap::before {
+      content: '';
+      position: absolute;
+      right: -8px;
+      top: 0;
+      width: 5px;
+      height: 2px;
+      background: var(--text3);
+    }
+    .vfader {
+      position: absolute;
+      -webkit-appearance: none;
+      appearance: none;
+      width: 172px;
+      height: 44px;
+      top: 64px;
+      left: -64px;
+      transform: rotate(-90deg);
+      transform-origin: center center;
+      outline: none;
+      cursor: pointer;
+      border-radius: 0;
+      background: linear-gradient(
+        to right,
+        var(--text)   0%,
+        var(--text)   calc(var(--fill, 100%) * 1%),
+        var(--border) calc(var(--fill, 100%) * 1%),
+        var(--border) 100%
+      );
+    }
+    /* Fader cap: wide flat bar */
+    .vfader::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;      /* visual height after -90deg rotation */
+      height: 36px;     /* visual width after -90deg rotation */
+      background: var(--text);
+      border-radius: 0;
+      cursor: pointer;
+      margin-top: -6px; /* (2px track - 14px thumb) / 2 */
+    }
+    .vfader::-moz-range-thumb {
+      width: 14px;
+      height: 36px;
+      background: var(--text);
+      border-radius: 0;
+      border: none;
+      cursor: pointer;
+    }
+    .vfader::-webkit-slider-runnable-track { height: 2px; }
+    .vfader::-moz-range-track              { height: 2px; }
+    .vfader.silent::-webkit-slider-thumb   { background: var(--text3); }
+    .vfader.silent::-moz-range-thumb       { background: var(--text3); }
+
+    /* ── PAN CONTROL ── */
+    .pan-section {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+    .pan-label {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text3);
+    }
+    .pan-val {
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      min-height: 18px;
+    }
+    /* Center tick mark above pan slider */
+    .pan-wrap {
+      position: relative;
+      width: 100%;
+    }
+    .pan-wrap::before {
+      content: '';
+      position: absolute;
+      top: -5px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      height: 4px;
+      background: var(--text3);
+      pointer-events: none;
+    }
+    .pan-slider {
       -webkit-appearance: none;
       appearance: none;
       width: 100%;
       height: 2px;
-      background: linear-gradient(
-        to right,
-        var(--text) 0%,
-        var(--text) calc(var(--fill, 100%) * 1%),
-        var(--border) calc(var(--fill, 100%) * 1%),
-        var(--border) 100%
-      );
+      background: var(--border);
       outline: none;
       cursor: pointer;
       border-radius: 0;
+      display: block;
     }
-    .mix-fader::-webkit-slider-thumb {
+    .pan-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 22px;
-      height: 22px;
-      background: var(--text);
-      cursor: pointer;
+      width: 12px;
+      height: 26px;
+      background: var(--text2);
       border-radius: 0;
-    }
-    .mix-fader::-moz-range-thumb {
-      width: 22px;
-      height: 22px;
-      background: var(--text);
       cursor: pointer;
+      margin-top: -12px;
+    }
+    .pan-slider::-moz-range-thumb {
+      width: 12px;
+      height: 26px;
+      background: var(--text2);
       border-radius: 0;
       border: none;
+      cursor: pointer;
     }
-    .mix-fader.silent::-webkit-slider-thumb { background: var(--text3); }
-    .mix-fader.silent::-moz-range-thumb     { background: var(--text3); }
 
     /* ── ERROR BANNER ── */
     .err-banner {
@@ -649,27 +769,55 @@
 
   <!-- MIXER VIEW -->
   <div class="mixer-view" id="mixer-view">
+    <div class="mix-desk">
 
-    <div class="mix-channel">
-      <div class="mix-head">
-        <div class="mix-name">01 — TRACK A</div>
+      <!-- CH 1 -->
+      <div class="mix-ch">
+        <div class="mix-ch-strip">
+          <div class="mix-ch-num">01</div>
+          <div class="mix-ch-name">TRACK A</div>
+        </div>
         <div class="mix-db" id="mix-db-0">0.0 dB</div>
+        <div class="vfader-wrap">
+          <input type="range" class="vfader" id="fader-0"
+                 min="0" max="100" value="100"
+                 oninput="setVol(0, this.value)">
+        </div>
+        <div class="pan-section">
+          <div class="pan-label">PAN</div>
+          <div class="pan-val" id="mix-pan-0">C</div>
+          <div class="pan-wrap">
+            <input type="range" class="pan-slider" id="pan-0"
+                   min="-100" max="100" step="5" value="0"
+                   oninput="setPan(0, this.value)">
+          </div>
+        </div>
       </div>
-      <input type="range" class="mix-fader" id="fader-0"
-             min="0" max="100" value="100"
-             oninput="setVol(0, this.value)">
-    </div>
 
-    <div class="mix-channel">
-      <div class="mix-head">
-        <div class="mix-name">02 — TRACK B</div>
+      <!-- CH 2 -->
+      <div class="mix-ch">
+        <div class="mix-ch-strip">
+          <div class="mix-ch-num">02</div>
+          <div class="mix-ch-name">TRACK B</div>
+        </div>
         <div class="mix-db" id="mix-db-1">0.0 dB</div>
+        <div class="vfader-wrap">
+          <input type="range" class="vfader" id="fader-1"
+                 min="0" max="100" value="100"
+                 oninput="setVol(1, this.value)">
+        </div>
+        <div class="pan-section">
+          <div class="pan-label">PAN</div>
+          <div class="pan-val" id="mix-pan-1">C</div>
+          <div class="pan-wrap">
+            <input type="range" class="pan-slider" id="pan-1"
+                   min="-100" max="100" step="5" value="0"
+                   oninput="setPan(1, this.value)">
+          </div>
+        </div>
       </div>
-      <input type="range" class="mix-fader" id="fader-1"
-             min="0" max="100" value="100"
-             oninput="setVol(1, this.value)">
-    </div>
 
+    </div>
   </div><!-- /.mixer-view -->
 
   <!-- TRANSPORT -->
@@ -725,8 +873,8 @@ const S = {
   globalStart: 0,       // AC.currentTime when transport started
   armed:       [false, false],
   tracks: [
-    { buf: null, src: null, gainNode: null, muted: false, dur: 0, vol: 1.0 },
-    { buf: null, src: null, gainNode: null, muted: false, dur: 0, vol: 1.0 },
+    { buf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
+    { buf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
   ],
   mr:          null,
   recTrack:    -1,
@@ -993,12 +1141,21 @@ function playTrack(idx, atAcTime, offset) {
   if (!t.buf || t.muted) return;
   killTrack(idx);
 
-  // Persist gain node across plays so vol changes apply immediately
+  // Persist gain + pan nodes across plays so live adjustments take effect immediately
   if (!t.gainNode) {
     t.gainNode = AC.createGain();
-    t.gainNode.connect(AC.destination);
+    t.panNode  = AC.createStereoPanner
+      ? AC.createStereoPanner()
+      : null;
+    if (t.panNode) {
+      t.gainNode.connect(t.panNode);
+      t.panNode.connect(AC.destination);
+    } else {
+      t.gainNode.connect(AC.destination);
+    }
   }
   t.gainNode.gain.value = t.vol;
+  if (t.panNode) t.panNode.pan.value = t.pan;
 
   const src = AC.createBufferSource();
   src.buffer = t.buf;
@@ -1187,7 +1344,8 @@ function clearTrack(idx) {
   killTrack(idx);
   const t = S.tracks[idx];
   if (t.gainNode) { try { t.gainNode.disconnect(); } catch(_) {} t.gainNode = null; }
-  t.buf = null; t.dur = 0; t.muted = false; t.src = null; t.vol = 1.0;
+  if (t.panNode)  { try { t.panNode.disconnect();  } catch(_) {} t.panNode  = null; }
+  t.buf = null; t.dur = 0; t.muted = false; t.src = null; t.vol = 1.0; t.pan = 0;
   S.armed[idx] = false;
   document.getElementById('tl-' + idx).innerHTML = '';
   refreshTrack(idx);
@@ -1352,24 +1510,34 @@ function toggleView() {
 }
 
 function setVol(idx, value) {
-  const t    = S.tracks[idx];
-  t.vol      = value / 100;
-  // Apply immediately to live gain node if playing
+  const t = S.tracks[idx];
+  t.vol   = value / 100;
   if (t.gainNode) t.gainNode.gain.setTargetAtTime(t.vol, AC.currentTime, 0.01);
-  updateFaderUI(idx, value);
+  updateVolUI(idx, value);
 }
 
-function updateFaderUI(idx, value) {
-  const fader = document.getElementById('fader-' + idx);
-  const dbEl  = document.getElementById('mix-db-' + idx);
-  const vol   = value / 100;
-  const isSilent = vol === 0;
+function setPan(idx, value) {
+  const t = S.tracks[idx];
+  t.pan   = value / 100;   // -1.0 … +1.0
+  if (t.panNode) t.panNode.pan.setTargetAtTime(t.pan, AC.currentTime, 0.01);
+  updatePanUI(idx, value);
+}
 
+function updateVolUI(idx, value) {
+  const fader    = document.getElementById('fader-' + idx);
+  const dbEl     = document.getElementById('mix-db-' + idx);
+  const vol      = value / 100;
+  const isSilent = vol === 0;
   fader.style.setProperty('--fill', value);
   fader.classList.toggle('silent', isSilent);
-
   dbEl.textContent = isSilent ? '—∞ dB' : volToDb(vol);
   dbEl.classList.toggle('silent', isSilent);
+}
+
+function updatePanUI(idx, value) {
+  const el  = document.getElementById('mix-pan-' + idx);
+  const val = parseInt(value);
+  el.textContent = val === 0 ? 'C' : (val < 0 ? 'L ' + Math.abs(val) : 'R ' + val);
 }
 
 function volToDb(vol) {
@@ -1380,9 +1548,12 @@ function volToDb(vol) {
 
 function syncMixerUI() {
   S.tracks.forEach((t, i) => {
-    const val = Math.round(t.vol * 100);
-    document.getElementById('fader-' + i).value = val;
-    updateFaderUI(i, val);
+    const volVal = Math.round(t.vol * 100);
+    document.getElementById('fader-' + i).value = volVal;
+    updateVolUI(i, volVal);
+    const panVal = Math.round(t.pan * 100);
+    document.getElementById('pan-' + i).value = panVal;
+    updatePanUI(i, panVal);
   });
 }
 
@@ -1420,27 +1591,24 @@ async function shareMix() {
     const EXPORT_SR  = 44100;
     const loopLen    = S.loopLen > 0 ? S.loopLen : calcLoopLen();
     const numSamples = Math.ceil(loopLen * EXPORT_SR);
-    const offCtx     = new OfflineAudioContext(2, numSamples, EXPORT_SR);
+    const offCtx = new OfflineAudioContext(2, numSamples, EXPORT_SR);
 
-    const merger = offCtx.createChannelMerger(2);
-    merger.connect(offCtx.destination);
-
-    if (t0.buf) {
+    [[t0, 0], [t1, 1]].forEach(([t]) => {
+      if (!t.buf) return;
       const src = offCtx.createBufferSource();
       const g   = offCtx.createGain();
-      g.gain.value = t0.muted ? 0 : t0.vol;
-      src.buffer = t0.buf;
-      src.connect(g); g.connect(merger, 0, 0);   // Track A → left
+      src.buffer   = t.buf;
+      g.gain.value = t.muted ? 0 : t.vol;
+      src.connect(g);
+      if (offCtx.createStereoPanner) {
+        const p   = offCtx.createStereoPanner();
+        p.pan.value = t.pan;
+        g.connect(p); p.connect(offCtx.destination);
+      } else {
+        g.connect(offCtx.destination);
+      }
       src.start(0);
-    }
-    if (t1.buf) {
-      const src = offCtx.createBufferSource();
-      const g   = offCtx.createGain();
-      g.gain.value = t1.muted ? 0 : t1.vol;
-      src.buffer = t1.buf;
-      src.connect(g); g.connect(merger, 0, 1);   // Track B → right
-      src.start(0);
-    }
+    });
 
     setStatus('RENDERING...');
     const rendered = await offCtx.startRendering();
