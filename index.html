@@ -1213,6 +1213,65 @@ function showErr(msg) {
   setTimeout(() => el.classList.remove('on'), 4000);
 }
 
+// ── APP ICON ─────────────────────────────────────────────────────────────────
+
+function buildAppIcon() {
+  const sz  = 180;
+  const c   = document.createElement('canvas');
+  c.width   = c.height = sz;
+  const ctx = c.getContext('2d');
+  const cx  = sz / 2;
+
+  // Background
+  ctx.fillStyle = '#111111';
+  ctx.fillRect(0, 0, sz, sz);
+
+  ctx.fillStyle = '#ffffff';
+
+  // ── Ball head (classic SM-style mesh grille) ──
+  const ballR  = 38;
+  const ballCY = 54;
+
+  ctx.beginPath();
+  ctx.arc(cx, ballCY, ballR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Horizontal grill lines clipped to ball
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, ballCY, ballR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.strokeStyle = '#111111';
+  ctx.lineWidth   = 2.5;
+  for (let y = ballCY - ballR + 8; y < ballCY + ballR; y += 9) {
+    ctx.beginPath();
+    ctx.moveTo(cx - ballR, y);
+    ctx.lineTo(cx + ballR, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // ── Grip body below ball ──
+  ctx.fillStyle = '#ffffff';
+  const bodyW = 20, bodyH = 30;
+  ctx.fillRect(cx - bodyW / 2, ballCY + ballR, bodyW, bodyH);
+
+  // ── Collar ──
+  const collarW = 46, collarH = 7;
+  ctx.fillRect(cx - collarW / 2, ballCY + ballR + bodyH, collarW, collarH);
+
+  // ── Thin neck ──
+  const neckW = 12, neckH = 22;
+  const neckY = ballCY + ballR + bodyH + collarH;
+  ctx.fillRect(cx - neckW / 2, neckY, neckW, neckH);
+
+  // ── Base plate ──
+  const baseW = 68, baseH = 9;
+  ctx.fillRect(cx - baseW / 2, neckY + neckH, baseW, baseH);
+
+  return c.toDataURL('image/png');
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────────────
 
 S.loopLen = calcLoopLen();
@@ -1220,6 +1279,19 @@ S.loopLen = calcLoopLen();
 if (!window.AudioContext && !window.webkitAudioContext) {
   showErr('WEB AUDIO NOT SUPPORTED — USE SAFARI 14.3+');
 }
+
+// Inject home screen & favicon icons
+(function () {
+  const url = buildAppIcon();
+  [
+    { rel: 'apple-touch-icon', sizes: '180x180' },
+    { rel: 'icon', type: 'image/png', sizes: '180x180' },
+  ].forEach(attrs => {
+    const link = Object.assign(document.createElement('link'), attrs);
+    link.href  = url;
+    document.head.appendChild(link);
+  });
+}());
 </script>
 </body>
 </html>
