@@ -62,6 +62,21 @@
       text-transform: uppercase;
       color: var(--text3);
     }
+    .view-btn {
+      background: none;
+      border: 1px solid var(--border);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text2);
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+      margin-right: 12px;
+    }
+    .view-btn:active { background: var(--bg2); }
+    .view-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 
     /* ── SCROLL CONTENT ── */
     .content {
@@ -318,7 +333,7 @@
 
     .tgrid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
     }
     .tbn {
       padding: 14px 0 11px;
@@ -341,9 +356,10 @@
     .tbn:active     { background: #222222; }
     .tbn-g { font-size: 18px; line-height: 1; }
 
-    #tbn-rec.active  { color: var(--red); }
-    #tbn-play.active { color: #ffffff; }
-    #tbn-loop.active { color: var(--accent); }
+    #tbn-rec.active   { color: var(--red); }
+    #tbn-play.active  { color: #ffffff; }
+    #tbn-loop.active  { color: var(--accent); }
+    #tbn-share.off    { opacity: 0.3; pointer-events: none; }
 
     /* ── COUNT-IN OVERLAY ── */
     .count-overlay {
@@ -431,6 +447,78 @@
     .cal-btn:active  { background: var(--bg2); }
     .cal-btn.running { color: var(--red); }
 
+    /* ── MIXER VIEW ── */
+    .mixer-view {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      display: none;
+      padding: 0 24px 32px;
+    }
+    .mixer-view.visible { display: block; }
+
+    .mix-channel {
+      padding: 24px 0 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mix-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .mix-name {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text2);
+    }
+    .mix-db {
+      font-size: 18px;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      min-width: 72px;
+      text-align: right;
+    }
+    .mix-db.silent { color: var(--text3); }
+
+    /* Custom range — square thumb, filled track */
+    .mix-fader {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(
+        to right,
+        var(--text) 0%,
+        var(--text) calc(var(--fill, 100%) * 1%),
+        var(--border) calc(var(--fill, 100%) * 1%),
+        var(--border) 100%
+      );
+      outline: none;
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .mix-fader::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      background: var(--text);
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .mix-fader::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      background: var(--text);
+      cursor: pointer;
+      border-radius: 0;
+      border: none;
+    }
+    .mix-fader.silent::-webkit-slider-thumb { background: var(--text3); }
+    .mix-fader.silent::-moz-range-thumb     { background: var(--text3); }
+
     /* ── ERROR BANNER ── */
     .err-banner {
       padding: 11px 24px;
@@ -451,6 +539,7 @@
   <!-- TOP BAR -->
   <div class="top-bar">
     <div class="wordmark">ZWEISPUR</div>
+    <button class="view-btn" id="view-btn" onclick="toggleView()">MIX</button>
     <div class="app-status" id="app-status">READY</div>
   </div>
 
@@ -558,6 +647,31 @@
     </div>
   </div><!-- /.content -->
 
+  <!-- MIXER VIEW -->
+  <div class="mixer-view" id="mixer-view">
+
+    <div class="mix-channel">
+      <div class="mix-head">
+        <div class="mix-name">01 — TRACK A</div>
+        <div class="mix-db" id="mix-db-0">0.0 dB</div>
+      </div>
+      <input type="range" class="mix-fader" id="fader-0"
+             min="0" max="100" value="100"
+             oninput="setVol(0, this.value)">
+    </div>
+
+    <div class="mix-channel">
+      <div class="mix-head">
+        <div class="mix-name">02 — TRACK B</div>
+        <div class="mix-db" id="mix-db-1">0.0 dB</div>
+      </div>
+      <input type="range" class="mix-fader" id="fader-1"
+             min="0" max="100" value="100"
+             oninput="setVol(1, this.value)">
+    </div>
+
+  </div><!-- /.mixer-view -->
+
   <!-- TRANSPORT -->
   <div class="transport">
     <div class="time-row">
@@ -576,6 +690,9 @@
       </button>
       <button class="tbn" id="tbn-loop" onclick="toggleLoop()">
         <span class="tbn-g">↺</span><span>LOOP</span>
+      </button>
+      <button class="tbn off" id="tbn-share" onclick="shareMix()">
+        <span class="tbn-g">↑</span><span>SHARE</span>
       </button>
     </div>
   </div>
@@ -608,8 +725,8 @@ const S = {
   globalStart: 0,       // AC.currentTime when transport started
   armed:       [false, false],
   tracks: [
-    { buf: null, src: null, muted: false, dur: 0 },
-    { buf: null, src: null, muted: false, dur: 0 },
+    { buf: null, src: null, gainNode: null, muted: false, dur: 0, vol: 1.0 },
+    { buf: null, src: null, gainNode: null, muted: false, dur: 0, vol: 1.0 },
   ],
   mr:          null,
   recTrack:    -1,
@@ -876,9 +993,16 @@ function playTrack(idx, atAcTime, offset) {
   if (!t.buf || t.muted) return;
   killTrack(idx);
 
+  // Persist gain node across plays so vol changes apply immediately
+  if (!t.gainNode) {
+    t.gainNode = AC.createGain();
+    t.gainNode.connect(AC.destination);
+  }
+  t.gainNode.gain.value = t.vol;
+
   const src = AC.createBufferSource();
   src.buffer = t.buf;
-  src.connect(AC.destination);
+  src.connect(t.gainNode);
 
   if (S.loopEnabled) {
     src.loop      = true;
@@ -1062,7 +1186,8 @@ function toggleMute(idx) {
 function clearTrack(idx) {
   killTrack(idx);
   const t = S.tracks[idx];
-  t.buf = null; t.dur = 0; t.muted = false; t.src = null;
+  if (t.gainNode) { try { t.gainNode.disconnect(); } catch(_) {} t.gainNode = null; }
+  t.buf = null; t.dur = 0; t.muted = false; t.src = null; t.vol = 1.0;
   S.armed[idx] = false;
   document.getElementById('tl-' + idx).innerHTML = '';
   refreshTrack(idx);
@@ -1200,6 +1325,8 @@ function refreshTrack(idx, override) {
 function refreshTransport() {
   document.getElementById('tbn-rec').classList.toggle('active', S.isRecording);
   document.getElementById('tbn-play').classList.toggle('active', S.isPlaying && !S.isRecording);
+  const hasAudio = S.tracks.some(t => t.buf);
+  document.getElementById('tbn-share').classList.toggle('off', !hasAudio);
 }
 
 function setStatus(msg) {
@@ -1211,6 +1338,166 @@ function showErr(msg) {
   el.textContent = msg;
   el.classList.add('on');
   setTimeout(() => el.classList.remove('on'), 4000);
+}
+
+// ── MIXER ─────────────────────────────────────────────────────────────────────
+
+function toggleView() {
+  const inMixer = document.getElementById('mixer-view').classList.toggle('visible');
+  document.querySelector('.content').style.display = inMixer ? 'none' : '';
+  const btn = document.getElementById('view-btn');
+  btn.textContent = inMixer ? 'TRACKS' : 'MIX';
+  btn.classList.toggle('active', inMixer);
+  if (inMixer) syncMixerUI();
+}
+
+function setVol(idx, value) {
+  const t    = S.tracks[idx];
+  t.vol      = value / 100;
+  // Apply immediately to live gain node if playing
+  if (t.gainNode) t.gainNode.gain.setTargetAtTime(t.vol, AC.currentTime, 0.01);
+  updateFaderUI(idx, value);
+}
+
+function updateFaderUI(idx, value) {
+  const fader = document.getElementById('fader-' + idx);
+  const dbEl  = document.getElementById('mix-db-' + idx);
+  const vol   = value / 100;
+  const isSilent = vol === 0;
+
+  fader.style.setProperty('--fill', value);
+  fader.classList.toggle('silent', isSilent);
+
+  dbEl.textContent = isSilent ? '—∞ dB' : volToDb(vol);
+  dbEl.classList.toggle('silent', isSilent);
+}
+
+function volToDb(vol) {
+  if (vol <= 0) return '—∞ dB';
+  const db = 20 * Math.log10(vol);
+  return (db >= 0 ? '+' : '') + db.toFixed(1) + ' dB';
+}
+
+function syncMixerUI() {
+  S.tracks.forEach((t, i) => {
+    const val = Math.round(t.vol * 100);
+    document.getElementById('fader-' + i).value = val;
+    updateFaderUI(i, val);
+  });
+}
+
+// ── SHARE / EXPORT ───────────────────────────────────────────────────────────
+
+// Lamejs loaded lazily on first share
+let _lameReady = null;
+function loadLame() {
+  if (_lameReady) return _lameReady;
+  _lameReady = new Promise((resolve, reject) => {
+    const s  = document.createElement('script');
+    s.src    = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+    s.onload  = resolve;
+    s.onerror = () => reject(new Error('Failed to load MP3 encoder'));
+    document.head.appendChild(s);
+  });
+  return _lameReady;
+}
+
+async function shareMix() {
+  const t0 = S.tracks[0], t1 = S.tracks[1];
+  if (!t0.buf && !t1.buf) return;
+
+  const btn = document.getElementById('tbn-share');
+  btn.style.opacity = '0.5';
+
+  try {
+    await ensureAC();
+
+    setStatus('LOADING ENCODER...');
+    await loadLame();
+
+    // Always render at 44100 Hz — lamejs max supported rate, and ensures
+    // correct encoding regardless of device AudioContext sample rate (often 48kHz)
+    const EXPORT_SR  = 44100;
+    const loopLen    = S.loopLen > 0 ? S.loopLen : calcLoopLen();
+    const numSamples = Math.ceil(loopLen * EXPORT_SR);
+    const offCtx     = new OfflineAudioContext(2, numSamples, EXPORT_SR);
+
+    const merger = offCtx.createChannelMerger(2);
+    merger.connect(offCtx.destination);
+
+    if (t0.buf) {
+      const src = offCtx.createBufferSource();
+      const g   = offCtx.createGain();
+      g.gain.value = t0.muted ? 0 : t0.vol;
+      src.buffer = t0.buf;
+      src.connect(g); g.connect(merger, 0, 0);   // Track A → left
+      src.start(0);
+    }
+    if (t1.buf) {
+      const src = offCtx.createBufferSource();
+      const g   = offCtx.createGain();
+      g.gain.value = t1.muted ? 0 : t1.vol;
+      src.buffer = t1.buf;
+      src.connect(g); g.connect(merger, 0, 1);   // Track B → right
+      src.start(0);
+    }
+
+    setStatus('RENDERING...');
+    const rendered = await offCtx.startRendering();
+
+    setStatus('ENCODING MP3...');
+    // Yield to UI before blocking encode loop
+    await sleep(0);
+    const mp3Blob = encodeMp3(rendered);
+    const file    = new File([mp3Blob], 'zweispur-mix.mp3', { type: 'audio/mpeg' });
+
+    setStatus('READY');
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'ZWEISPUR MIX' });
+    } else {
+      // Desktop fallback: trigger download
+      const url = URL.createObjectURL(file);
+      const a   = Object.assign(document.createElement('a'), { href: url, download: 'zweispur-mix.mp3' });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') { showErr('SHARE FAILED'); console.warn(e); }
+    setStatus('READY');
+  }
+
+  btn.style.opacity = '';
+}
+
+function encodeMp3(buffer) {
+  const sr        = buffer.sampleRate;   // 44100
+  const encoder   = new lamejs.Mp3Encoder(2, sr, 320);  // stereo, 44100 Hz, 320 kbps
+  const blockSize = 1152;                // must be multiple of 576 for lamejs
+
+  const left  = floatToInt16(buffer.getChannelData(0));
+  const right = floatToInt16(buffer.getChannelData(1));
+
+  const chunks = [];
+  for (let i = 0; i < buffer.length; i += blockSize) {
+    const l   = left.subarray(i, i + blockSize);
+    const r   = right.subarray(i, i + blockSize);
+    const out = encoder.encodeBuffer(l, r);
+    if (out.length > 0) chunks.push(new Uint8Array(out));
+  }
+  const tail = encoder.flush();
+  if (tail.length > 0) chunks.push(new Uint8Array(tail));
+
+  return new Blob(chunks, { type: 'audio/mpeg' });
+}
+
+function floatToInt16(float32) {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    out[i]  = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return out;
 }
 
 // ── APP ICON ─────────────────────────────────────────────────────────────────
