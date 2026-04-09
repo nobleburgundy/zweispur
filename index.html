@@ -38,6 +38,17 @@
       inset: 0;
       display: flex;
       flex-direction: column;
+      align-items: center;
+    }
+
+    .app-col {
+      width: 100%;
+      max-width: 640px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
     }
 
     /* ── TOP BAR ── */
@@ -180,6 +191,8 @@
 
     /* ── METRONOME ── */
     .metro-body { padding: 0 24px 16px; }
+    .bpm-controls { overflow: hidden; transition: max-height 0.2s ease, opacity 0.2s ease; max-height: 200px; opacity: 1; }
+    .bpm-controls.hidden { max-height: 0; opacity: 0; pointer-events: none; }
 
     .bpm-row {
       display: flex;
@@ -663,6 +676,73 @@
       touch-action: none;
     }
 
+    /* ── RESPONSIVE ── */
+
+    /* iPad portrait and up (≥ 600px) */
+    @media (min-width: 600px) {
+      .app-col {
+        border-left:  1px solid var(--border);
+        border-right: 1px solid var(--border);
+      }
+
+      .top-bar {
+        padding: 20px 32px 16px;
+        padding-top: max(20px, calc(env(safe-area-inset-top, 0px) + 12px));
+      }
+
+      .track-head   { padding: 16px 32px 14px; }
+      .track-tl     { height: 44px; margin: 0 32px; }
+      .tl-block:not(.preview) { top: 8px; height: 28px; }
+      .track-btns .tb { padding: 16px 0; font-size: 11px; }
+      .track-btns .tb-ico { font-size: 15px; }
+
+      .sec-label    { padding: 18px 32px 12px; }
+      .metro-body   { padding: 0 32px 20px; }
+      .bpm-num      { font-size: 52px; min-width: 90px; }
+      .bpm-btn      { width: 52px; height: 52px; font-size: 12px; }
+      .bpm-ctrl     { gap: 10px; margin-bottom: 16px; }
+      .mt-btn       { padding: 14px 0; font-size: 11px; }
+      .cal-btn      { padding: 13px 16px; }
+      .bars-label   { font-size: 11px; }
+      .bar-opt      { padding: 12px 0; font-size: 11px; }
+
+      .time-row     { padding: 14px 32px 12px; }
+      .time-counter { font-size: 30px; }
+      .tbn          { padding: 18px 0 14px; font-size: 10px; letter-spacing: 0.16em; }
+      .tbn-g        { font-size: 22px; }
+
+      /* Taller fader on tablet
+         Wrapper 52×220, input 220×52, offset: top=(220-52)/2=84, left=(52-220)/2=-84 */
+      .vfader-wrap  { width: 52px; height: 220px; }
+      .vfader       { width: 220px; height: 52px; top: 84px; left: -84px; }
+      .vfader::-webkit-slider-thumb { width: 16px; height: 44px; margin-top: -7px; }
+      .vfader::-moz-range-thumb     { width: 16px; height: 44px; }
+      .vfader::-webkit-slider-runnable-track { height: 2px; }
+      .vfader::-moz-range-track              { height: 2px; }
+
+      .pan-dial    { width: 72px; height: 72px; }
+      .mix-ch      { padding: 24px 20px 28px; gap: 14px; }
+      .mix-ch-name { font-size: 12px; }
+      .mix-db      { font-size: 17px; }
+    }
+
+    /* iPad landscape / desktop (≥ 900px) */
+    @media (min-width: 900px) {
+      html, body { font-size: 15px; cursor: default; }
+
+      .track-btns .tb { padding: 18px 0; }
+      .tbn            { padding: 20px 0 16px; }
+      .tbn-g          { font-size: 24px; }
+      .time-counter   { font-size: 34px; }
+
+      /* Even taller fader on desktop
+         Wrapper 52×260, input 260×52, offset: top=(260-52)/2=104, left=(52-260)/2=-104 */
+      .vfader-wrap  { width: 52px; height: 260px; }
+      .vfader       { width: 260px; height: 52px; top: 104px; left: -104px; }
+
+      .pan-dial { width: 80px; height: 80px; }
+    }
+
     /* ── ERROR BANNER ── */
     .err-banner {
       padding: 11px 24px;
@@ -679,6 +759,8 @@
   </style>
 </head>
 <body>
+
+  <div class="app-col">
 
   <!-- TOP BAR -->
   <div class="top-bar">
@@ -745,25 +827,27 @@
     <div class="sec-label">METRONOME</div>
     <div class="metro-body">
 
-      <div class="bpm-row">
-        <div>
-          <div class="bpm-num" id="bpm-val">120</div>
-          <div class="bpm-sub">BPM</div>
+      <div class="bpm-controls" id="bpm-controls">
+        <div class="bpm-row">
+          <div>
+            <div class="bpm-num" id="bpm-val">120</div>
+            <div class="bpm-sub">BPM</div>
+          </div>
+          <div class="beat-pips">
+            <div class="pip" id="pip-0"></div>
+            <div class="pip" id="pip-1"></div>
+            <div class="pip" id="pip-2"></div>
+            <div class="pip" id="pip-3"></div>
+          </div>
         </div>
-        <div class="beat-pips">
-          <div class="pip" id="pip-0"></div>
-          <div class="pip" id="pip-1"></div>
-          <div class="pip" id="pip-2"></div>
-          <div class="pip" id="pip-3"></div>
-        </div>
-      </div>
 
-      <div class="bpm-ctrl">
-        <button class="bpm-btn" onclick="adjBpm(-10)">−10</button>
-        <button class="bpm-btn" onclick="adjBpm(-1)">−1</button>
-        <button class="bpm-btn tap" id="tap-btn" onclick="tapTempo()">TAP</button>
-        <button class="bpm-btn" onclick="adjBpm(1)">+1</button>
-        <button class="bpm-btn" onclick="adjBpm(10)">+10</button>
+        <div class="bpm-ctrl">
+          <button class="bpm-btn" onclick="adjBpm(-10)">−10</button>
+          <button class="bpm-btn" onclick="adjBpm(-1)">−1</button>
+          <button class="bpm-btn tap" id="tap-btn" onclick="tapTempo()">TAP</button>
+          <button class="bpm-btn" onclick="adjBpm(1)">+1</button>
+          <button class="bpm-btn" onclick="adjBpm(10)">+10</button>
+        </div>
       </div>
 
       <div class="bars-label">LOOP LENGTH</div>
@@ -861,6 +945,8 @@
       </button>
     </div>
   </div>
+
+  </div><!-- /.app-col -->
 
   <!-- FILENAME MODAL -->
   <div class="fname-backdrop" id="fname-backdrop">
@@ -1513,6 +1599,10 @@ function setBars(n) {
   });
 }
 
+function updateBpmVisibility() {
+  document.getElementById('bpm-controls').classList.toggle('hidden', !S.metroOn && !S.countInOn);
+}
+
 function toggleMetro() {
   S.metroOn = !S.metroOn;
   const btn = document.getElementById('mt-metro');
@@ -1523,6 +1613,7 @@ function toggleMetro() {
   } else {
     stopMetro();
   }
+  updateBpmVisibility();
 }
 
 function toggleCountIn() {
@@ -1530,6 +1621,7 @@ function toggleCountIn() {
   const btn = document.getElementById('mt-countin');
   btn.classList.toggle('on', S.countInOn);
   btn.textContent = S.countInOn ? '↺ COUNT: ON' : '↺ COUNT-IN';
+  updateBpmVisibility();
 }
 
 // ── UI REFRESH ───────────────────────────────────────────────────────────────
@@ -1991,6 +2083,9 @@ if (!window.AudioContext && !window.webkitAudioContext) {
 
 // Init pan dials
 initDials();
+
+// Hide BPM controls until METRO or COUNT-IN is active
+updateBpmVisibility();
 
 // Inject home screen & favicon icons
 (function () {
