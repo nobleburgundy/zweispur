@@ -282,7 +282,7 @@
     /* ── METRO TOGGLES ── */
     .mt-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       border: 1px solid var(--border);
     }
     .mt-btn {
@@ -813,8 +813,9 @@
       </div>
 
       <div class="mt-row">
-        <button class="mt-btn" id="mt-metro"   onclick="toggleMetro()">◼ METRO</button>
-        <button class="mt-btn" id="mt-countin" onclick="toggleCountIn()">↺ COUNT-IN</button>
+        <button class="mt-btn" id="mt-metro"     onclick="toggleMetro()">◼ METRO</button>
+        <button class="mt-btn" id="mt-countin"   onclick="toggleCountIn()">↺ COUNT-IN</button>
+        <button class="mt-btn" id="mt-halfspeed" onclick="toggleHalfSpeed()">½ SPEED</button>
       </div>
 
       <div class="cal-row">
@@ -950,9 +951,10 @@ const S = {
   isRecording: false,
   globalStart: 0,       // AC.currentTime when transport started
   armed:       [false, false],
+  halfSpeed: false,
   tracks: [
-    { buf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
-    { buf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
+    { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
+    { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
   ],
   mr:          null,
   recTrack:    -1,
@@ -1079,6 +1081,10 @@ async function startRec(idx) {
       if (S.recHasPlayback && S.latencyOffset > 0) {
         buf = trimBuffer(buf, S.latencyOffset);
       }
+      if (S.halfSpeed) {
+        S.tracks[idx].origBuf = buf;
+        buf = timeStretch(buf, 2.0);
+      }
       S.tracks[idx].buf = buf;
       S.tracks[idx].dur = buf.duration;
       if (S.useTrackLen && idx === 0) S.loopLen = buf.duration;
@@ -1099,6 +1105,87 @@ function stopRec() {
   S.mr          = null;
   S.recTrack    = -1;
   S.isRecording = false;
+}
+
+// ── HALF SPEED ────────────────────────────────────────────────────────────────
+
+function timeStretch(buffer, factor) {
+  // OLA (Overlap-Add) time stretch — doubles length, preserves pitch.
+  // factor=2.0 → half speed.  Analysis hop 75% overlap, synthesis hop 2×.
+  const frameSize = 4096;
+  const hopA      = 1024;
+  const hopS      = Math.round(hopA * factor);
+  const inLen     = buffer.length;
+  const outLen    = Math.round(inLen * factor) + frameSize;
+  const numCh     = buffer.numberOfChannels;
+  const out       = AC.createBuffer(numCh, outLen, buffer.sampleRate);
+
+  // Hanning window
+  const win = new Float32Array(frameSize);
+  for (let i = 0; i < frameSize; i++) {
+    win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (frameSize - 1)));
+  }
+
+  for (let ch = 0; ch < numCh; ch++) {
+    const inData  = buffer.getChannelData(ch);
+    const outData = out.getChannelData(ch);
+    const norm    = new Float32Array(outLen);
+
+    let posIn = 0, posOut = 0;
+    while (posIn + frameSize <= inLen) {
+      for (let i = 0; i < frameSize; i++) {
+        const w = win[i];
+        outData[posOut + i] += inData[posIn + i] * w;
+        norm[posOut + i]    += w * w;
+      }
+      posIn  += hopA;
+      posOut += hopS;
+    }
+    for (let i = 0; i < outLen; i++) {
+      if (norm[i] > 1e-6) outData[i] /= norm[i];
+    }
+  }
+  return out;
+}
+
+async function toggleHalfSpeed() {
+  if (S.isRecording) return;
+  await ensureAC();
+
+  S.halfSpeed = !S.halfSpeed;
+  const btn = document.getElementById('mt-halfspeed');
+  btn.classList.add('on');
+  btn.textContent = '...';
+  setStatus(S.halfSpeed ? 'STRETCHING...' : 'RESTORING...');
+  await sleep(0); // let UI paint before blocking work
+
+  for (let i = 0; i < 2; i++) {
+    const t = S.tracks[i];
+    if (!t.buf) continue;
+    if (S.halfSpeed) {
+      t.origBuf = t.buf;
+      t.buf     = timeStretch(t.buf, 2.0);
+    } else {
+      t.buf     = t.origBuf;
+      t.origBuf = null;
+    }
+    t.dur = t.buf.duration;
+    refreshTrack(i);
+  }
+
+  // Sync loop length
+  S.loopLen = calcLoopLen();
+
+  // Restart playback with new buffers if transport is running
+  if (S.isPlaying) {
+    killAll();
+    S.globalStart = AC.currentTime;
+    S.tracks.forEach((t, i) => { if (t.buf) playTrack(i, AC.currentTime, 0); });
+  }
+
+  btn.classList.toggle('on', S.halfSpeed);
+  btn.textContent = S.halfSpeed ? '½ ON' : '½ SPEED';
+  setStatus(S.halfSpeed ? 'HALF SPEED' : 'READY');
 }
 
 // ── LATENCY COMPENSATION ─────────────────────────────────────────────────────
@@ -1423,7 +1510,7 @@ function clearTrack(idx) {
   const t = S.tracks[idx];
   if (t.gainNode) { try { t.gainNode.disconnect(); } catch(_) {} t.gainNode = null; }
   if (t.panNode)  { try { t.panNode.disconnect();  } catch(_) {} t.panNode  = null; }
-  t.buf = null; t.dur = 0; t.muted = false; t.src = null; t.vol = 1.0; t.pan = 0;
+  t.buf = null; t.origBuf = null; t.dur = 0; t.muted = false; t.src = null; t.vol = 1.0; t.pan = 0;
   S.armed[idx] = false;
   document.getElementById('tl-' + idx).innerHTML = '';
   refreshTrack(idx);
