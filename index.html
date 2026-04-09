@@ -962,7 +962,6 @@
 
 let AC = null;
 let micStream = null;
-let recStream = null;   // mic stream boosted through a Web Audio gain stage
 let clockRAF = null;
 
 const S = {
@@ -1025,16 +1024,6 @@ async function ensureMic() {
       video: false
     });
 
-    // Disabling echoCancellation removes iOS's hidden ~9dB gain boost.
-    // Compensate by routing through a Web Audio gain stage before recording.
-    await ensureAC();
-    const src  = AC.createMediaStreamSource(micStream);
-    const gain = AC.createGain();
-    gain.gain.value = 3.0;   // +9.5 dB — restores level lost without EC processing
-    const dest = AC.createMediaStreamDestination();
-    src.connect(gain);
-    gain.connect(dest);
-    recStream = dest.stream;
   } catch (e) {
     showErr('MICROPHONE ACCESS DENIED');
     throw e;
@@ -1095,6 +1084,29 @@ function flashPip(bi) {
 
 // ── RECORDING ────────────────────────────────────────────────────────────────
 
+function normalizeRecording(buf) {
+  // With echoCancellation:false, iOS no longer applies its voice-processing
+  // gain stage, leaving recordings much quieter than expected. Normalize each
+  // recording to 85% of full scale so playback is consistently audible.
+  // Only boosts — never reduces a well-recorded take. Capped at 8× (+18dB)
+  // so near-silence (empty room noise) doesn't get amplified into the mix.
+  let peak = 0;
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      const abs = Math.abs(data[i]);
+      if (abs > peak) peak = abs;
+    }
+  }
+  if (peak < 0.001 || peak >= 0.85) return buf;
+  const gain = Math.min(0.85 / peak, 8.0);
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) data[i] *= gain;
+  }
+  return buf;
+}
+
 function getMime() {
   if (typeof MediaRecorder === 'undefined') return null;
   for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']) {
@@ -1108,7 +1120,7 @@ async function startRec(idx) {
   const mime = getMime();
   if (mime === null) { showErr('MEDIARECORDER NOT SUPPORTED — USE SAFARI 14.3+'); return; }
 
-  const mr = new MediaRecorder(recStream, {
+  const mr = new MediaRecorder(micStream, {
     ...(mime ? { mimeType: mime } : {}),
     audioBitsPerSecond: 256000,   // 256kbps AAC — far above Safari's ~32kbps default
   });
@@ -1123,6 +1135,7 @@ async function startRec(idx) {
       const blob = new Blob(S.recChunks, { type: mime || 'audio/webm' });
       const ab   = await blob.arrayBuffer();
       let   buf  = await new Promise((res, rej) => AC.decodeAudioData(ab, res, rej));
+      buf = normalizeRecording(buf);
       // Apply latency compensation for overdub recordings
       if (S.recHasPlayback && S.latencyOffset > 0) {
         buf = trimBuffer(buf, S.latencyOffset);
@@ -1353,7 +1366,7 @@ async function calibrate() {
     const mime   = getMime();
     if (mime === null) { showErr('MEDIARECORDER NOT SUPPORTED'); return; }
 
-    const mr     = new MediaRecorder(recStream, {
+    const mr     = new MediaRecorder(micStream, {
       ...(mime ? { mimeType: mime } : {}),
       audioBitsPerSecond: 256000,
     });
@@ -1597,6 +1610,16 @@ function startClock() {
     let pos = AC.currentTime - S.globalStart;
     if (pos < 0) pos = 0;
     if (S.loopEnabled && S.loopLen > 0) pos = pos % S.loopLen;
+
+    // Auto-stop at end of longest track when not looping and not recording
+    if (!S.loopEnabled && !S.isRecording) {
+      const maxDur = Math.max(0, ...S.tracks.map(t => t.buf ? t.dur : 0));
+      if (maxDur > 0 && pos >= maxDur) {
+        handleStop();
+        return;
+      }
+    }
+
     const m = Math.floor(pos / 60);
     const s = (pos % 60).toFixed(1).padStart(4, '0');
     document.getElementById('time-disp').textContent = m + ':' + s;
