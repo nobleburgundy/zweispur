@@ -25,7 +25,7 @@
       height: 100%;
       background: var(--bg);
       color: var(--text);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 14px;
       line-height: 1.4;
       overscroll-behavior: none;
@@ -76,7 +76,7 @@
     .view-btn {
       background: none;
       border: 1px solid var(--border);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 10px;
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -159,7 +159,7 @@
       background: none;
       border: none;
       border-right: 1px solid var(--border);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 10px;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -241,7 +241,7 @@
       height: 44px;
       background: none;
       border: 1px solid var(--border);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 11px;
       letter-spacing: 0.06em;
       color: var(--text2);
@@ -279,7 +279,7 @@
       background: none;
       border: none;
       border-right: 1px solid var(--border);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 10px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
@@ -295,7 +295,7 @@
     /* ── METRO TOGGLES ── */
     .mt-row {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(4, 1fr);
       border: 1px solid var(--border);
     }
     .mt-btn {
@@ -303,7 +303,7 @@
       background: none;
       border: none;
       border-right: 1px solid var(--border);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 10px;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -353,7 +353,7 @@
       background: none;
       border: none;
       border-right: 1px solid #2a2a2a;
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 9px;
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -449,7 +449,7 @@
       border: none;
       border-bottom: 1px solid var(--border);
       color: var(--text);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 16px;
       letter-spacing: 0.04em;
       outline: none;
@@ -465,7 +465,7 @@
       background: none;
       border: none;
       border-right: 1px solid var(--border);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 11px;
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -519,7 +519,7 @@
       background: none;
       border: none;
       border-left: 1px solid var(--border);
-      font-family: 'Courier New', Courier, monospace;
+      font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 10px;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -860,9 +860,10 @@
       </div>
 
       <div class="mt-row">
-        <button class="mt-btn" id="mt-metro"     onclick="toggleMetro()">◼ METRO</button>
-        <button class="mt-btn" id="mt-countin"   onclick="toggleCountIn()">↺ COUNT-IN</button>
-        <button class="mt-btn" id="mt-halfspeed" onclick="toggleHalfSpeed()">½ SPEED</button>
+        <button class="mt-btn" id="mt-metro"        onclick="toggleMetro()">◼ METRO</button>
+        <button class="mt-btn" id="mt-countin"     onclick="toggleCountIn()">↺ COUNT-IN</button>
+        <button class="mt-btn" id="mt-halfspeed"   onclick="setSpeedMode('half')">½ SPEED</button>
+        <button class="mt-btn" id="mt-threequarter" onclick="setSpeedMode('three4')">¾ SPEED</button>
       </div>
 
       <div class="cal-row">
@@ -992,7 +993,7 @@ const S = {
   isRecording: false,
   globalStart: 0,       // AC.currentTime when transport started
   armed:       [false, false],
-  halfSpeed: false,
+  speedMode: null,   // null | 'half' | 'three4'
   tracks: [
     { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
     { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
@@ -1131,9 +1132,12 @@ async function startRec(idx) {
       if (S.recHasPlayback && S.latencyOffset > 0) {
         buf = trimBuffer(buf, S.latencyOffset);
       }
-      if (S.halfSpeed) {
+      if (S.speedMode === 'half') {
         S.tracks[idx].origBuf = buf;
         buf = timeStretch(buf, 2.0);
+      } else if (S.speedMode === 'three4') {
+        S.tracks[idx].origBuf = buf;
+        buf = timeStretch(buf, 4 / 3);
       }
       S.tracks[idx].buf = buf;
       S.tracks[idx].dur = buf.duration;
@@ -1157,68 +1161,153 @@ function stopRec() {
   S.isRecording = false;
 }
 
-// ── HALF SPEED ────────────────────────────────────────────────────────────────
+// ── PHASE VOCODER TIME STRETCH ────────────────────────────────────────────────
+// Replaces basic OLA. FFT-based phase accumulation maintains bin phase
+// coherence between frames, eliminating the metallic/phasey OLA artifacts.
+
+function pvFFT(re, im, forward) {
+  const N = re.length;
+  // Bit-reversal permutation
+  for (let i = 1, j = 0; i < N; i++) {
+    let bit = N >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+          t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  // Cooley-Tukey butterfly
+  for (let len = 2; len <= N; len <<= 1) {
+    const ang = (forward ? -1 : 1) * 2 * Math.PI / len;
+    const wR = Math.cos(ang), wI = Math.sin(ang);
+    for (let i = 0; i < N; i += len) {
+      let tR = 1, tI = 0;
+      for (let j = 0; j < (len >> 1); j++) {
+        const uR = re[i+j],           uI = im[i+j];
+        const vR = re[i+j+(len>>1)]*tR - im[i+j+(len>>1)]*tI;
+        const vI = re[i+j+(len>>1)]*tI + im[i+j+(len>>1)]*tR;
+        re[i+j]          = uR+vR;  im[i+j]          = uI+vI;
+        re[i+j+(len>>1)] = uR-vR;  im[i+j+(len>>1)] = uI-vI;
+        const nr = tR*wR - tI*wI; tI = tR*wI + tI*wR; tR = nr;
+      }
+    }
+  }
+  if (!forward) for (let i = 0; i < N; i++) { re[i] /= N; im[i] /= N; }
+}
 
 function timeStretch(buffer, factor) {
-  // OLA (Overlap-Add) time stretch — doubles length, preserves pitch.
-  // factor=2.0 → half speed.  Analysis hop 75% overlap, synthesis hop 2×.
-  const frameSize = 4096;
-  const hopA      = 1024;
-  const hopS      = Math.round(hopA * factor);
-  const inLen     = buffer.length;
-  const outLen    = Math.round(inLen * factor) + frameSize;
-  const numCh     = buffer.numberOfChannels;
-  const out       = AC.createBuffer(numCh, outLen, buffer.sampleRate);
+  const N    = 2048;                      // FFT frame size
+  const N2   = N >> 1;                    // Nyquist bin
+  const hopA = N >> 2;                    // analysis hop = N/4 (75% overlap)
+  const hopS = Math.round(hopA * factor); // synthesis hop
+
+  const numCh  = buffer.numberOfChannels;
+  const inLen  = buffer.length;
+  const outLen = Math.round(inLen * factor) + N;
+  const out    = AC.createBuffer(numCh, outLen, buffer.sampleRate);
 
   // Hanning window
-  const win = new Float32Array(frameSize);
-  for (let i = 0; i < frameSize; i++) {
-    win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (frameSize - 1)));
-  }
+  const win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / N));
+
+  // Precompute output normalization: sum of win² at each output sample position
+  const norm = new Float32Array(outLen);
+  for (let p = 0; p < outLen; p += hopS)
+    for (let i = 0; i < N && p+i < outLen; i++) norm[p+i] += win[i] * win[i];
+
+  const TWO_PI = 2 * Math.PI;
+  const expectedDphi = TWO_PI * hopA / N;  // expected phase advance per bin per analysis hop
 
   for (let ch = 0; ch < numCh; ch++) {
     const inData  = buffer.getChannelData(ch);
     const outData = out.getChannelData(ch);
-    const norm    = new Float32Array(outLen);
 
-    let posIn = 0, posOut = 0;
-    while (posIn + frameSize <= inLen) {
-      for (let i = 0; i < frameSize; i++) {
-        const w = win[i];
-        outData[posOut + i] += inData[posIn + i] * w;
-        norm[posOut + i]    += w * w;
+    const re        = new Float32Array(N);
+    const im        = new Float32Array(N);
+    const lastPhase = new Float32Array(N2 + 1);  // last analysis phase per bin
+    const phaseAcc  = new Float32Array(N2 + 1);  // running synthesis phase per bin
+
+    let inPos = 0, outPos = 0;
+
+    while (outPos < outLen) {
+      // Windowed analysis frame
+      for (let i = 0; i < N; i++) {
+        const idx = inPos + i;
+        re[i] = idx < inLen ? inData[idx] * win[i] : 0;
+        im[i] = 0;
       }
-      posIn  += hopA;
-      posOut += hopS;
-    }
-    for (let i = 0; i < outLen; i++) {
-      if (norm[i] > 1e-6) outData[i] /= norm[i];
+
+      pvFFT(re, im, true);
+
+      // Phase vocoder: compute true instantaneous frequency, advance synthesis phase
+      for (let k = 0; k <= N2; k++) {
+        const mag   = Math.sqrt(re[k]*re[k] + im[k]*im[k]);
+        const phase = Math.atan2(im[k], re[k]);
+
+        // Phase deviation from the expected linear advance
+        let dphi = phase - lastPhase[k] - k * expectedDphi;
+        dphi -= TWO_PI * Math.round(dphi / TWO_PI);   // wrap to [-π, π]
+
+        // Accumulate synthesis phase using true instantaneous frequency
+        phaseAcc[k] += hopS * (k * TWO_PI / N + dphi / hopA);
+        lastPhase[k] = phase;
+
+        re[k] = mag * Math.cos(phaseAcc[k]);
+        im[k] = mag * Math.sin(phaseAcc[k]);
+      }
+
+      // Restore conjugate symmetry for real-signal IFFT
+      for (let k = 1; k < N2; k++) { re[N-k] = re[k]; im[N-k] = -im[k]; }
+      im[0] = 0; im[N2] = 0;   // DC and Nyquist are purely real
+
+      pvFFT(re, im, false);
+
+      // Windowed overlap-add, normalized by precomputed window sum
+      for (let i = 0; i < N; i++) {
+        const idx = outPos + i;
+        if (idx < outLen && norm[idx] > 1e-8)
+          outData[idx] += re[i] * win[i] / norm[idx];
+      }
+
+      inPos  += hopA;
+      outPos += hopS;
     }
   }
+
   return out;
 }
 
-async function toggleHalfSpeed() {
+async function setSpeedMode(mode) {
   if (S.isRecording) return;
   await ensureAC();
 
-  S.halfSpeed = !S.halfSpeed;
-  const btn = document.getElementById('mt-halfspeed');
-  btn.classList.add('on');
-  btn.textContent = '...';
-  setStatus(S.halfSpeed ? 'STRETCHING...' : 'RESTORING...');
-  await sleep(0); // let UI paint before blocking work
+  // Tapping the active mode toggles back to normal
+  const target = S.speedMode === mode ? null : mode;
+  S.speedMode  = target;
+
+  // Mark both buttons as processing
+  const btnH = document.getElementById('mt-halfspeed');
+  const btnQ = document.getElementById('mt-threequarter');
+  btnH.classList.remove('on'); btnH.textContent = '...';
+  btnQ.classList.remove('on'); btnQ.textContent = '...';
+  setStatus('PROCESSING...');
+  await sleep(0); // let UI paint before blocking JS
 
   for (let i = 0; i < 2; i++) {
     const t = S.tracks[i];
+    if (!t.buf && !t.origBuf) continue;
+    // Always restore original first so we re-stretch from clean audio
+    if (t.origBuf) { t.buf = t.origBuf; t.origBuf = null; }
     if (!t.buf) continue;
-    if (S.halfSpeed) {
+    if (target === 'half') {
       t.origBuf = t.buf;
       t.buf     = timeStretch(t.buf, 2.0);
-    } else {
-      t.buf     = t.origBuf;
-      t.origBuf = null;
+    } else if (target === 'three4') {
+      t.origBuf = t.buf;
+      t.buf     = timeStretch(t.buf, 4 / 3);
     }
+    // target === null: already restored from origBuf above
     t.dur = t.buf.duration;
     refreshTrack(i);
   }
@@ -1233,9 +1322,11 @@ async function toggleHalfSpeed() {
     S.tracks.forEach((t, i) => { if (t.buf) playTrack(i, AC.currentTime, 0); });
   }
 
-  btn.classList.toggle('on', S.halfSpeed);
-  btn.textContent = S.halfSpeed ? '½ ON' : '½ SPEED';
-  setStatus(S.halfSpeed ? 'HALF SPEED' : 'READY');
+  btnH.classList.toggle('on', target === 'half');
+  btnQ.classList.toggle('on', target === 'three4');
+  btnH.textContent = target === 'half'    ? '½ ON'    : '½ SPEED';
+  btnQ.textContent = target === 'three4'  ? '¾ ON'    : '¾ SPEED';
+  setStatus(target === 'half' ? 'HALF SPEED' : target === 'three4' ? '¾ SPEED' : 'READY');
 }
 
 // ── LATENCY COMPENSATION ─────────────────────────────────────────────────────
