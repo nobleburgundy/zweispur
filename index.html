@@ -184,9 +184,10 @@
       font-size: 10px;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: var(--text3);
-      padding: 14px 24px 10px;
+      color: var(--text2);
+      padding: 14px 24px 10px 21px;
       border-top: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
     }
 
     /* ── METRONOME ── */
@@ -623,28 +624,10 @@
         var(--border) 100%
       );
     }
-    /* Fader cap: wide flat bar */
-    .vfader::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px;      /* visual height after -90deg rotation */
-      height: 36px;     /* visual width after -90deg rotation */
-      background: var(--text);
-      border-radius: 0;
-      cursor: pointer;
-      margin-top: -6px; /* (2px track - 14px thumb) / 2 */
-    }
-    .vfader::-moz-range-thumb {
-      width: 14px;
-      height: 36px;
-      background: var(--text);
-      border-radius: 0;
-      border: none;
-      cursor: pointer;
-    }
+    .vfader::-webkit-slider-thumb  { -webkit-appearance: none; width: 0; height: 0; background: transparent; border: none; }
+    .vfader::-moz-range-thumb      { width: 0; height: 0; background: transparent; border: none; }
     .vfader::-webkit-slider-runnable-track { height: 2px; }
     .vfader::-moz-range-track              { height: 2px; }
-    .vfader.silent::-webkit-slider-thumb   { background: var(--text3); }
-    .vfader.silent::-moz-range-thumb       { background: var(--text3); }
 
     /* ── PAN CONTROL ── */
     .pan-section {
@@ -696,7 +679,7 @@
       .track-btns .tb { padding: 16px 0; font-size: 11px; }
       .track-btns .tb-ico { font-size: 15px; }
 
-      .sec-label    { padding: 18px 32px 12px; }
+      .sec-label    { padding: 18px 32px 12px 29px; }
       .metro-body   { padding: 0 32px 20px; }
       .bpm-num      { font-size: 52px; min-width: 90px; }
       .bpm-btn      { width: 52px; height: 52px; font-size: 12px; }
@@ -715,8 +698,6 @@
          Wrapper 52×220, input 220×52, offset: top=(220-52)/2=84, left=(52-220)/2=-84 */
       .vfader-wrap  { width: 52px; height: 220px; }
       .vfader       { width: 220px; height: 52px; top: 84px; left: -84px; }
-      .vfader::-webkit-slider-thumb { width: 16px; height: 44px; margin-top: -7px; }
-      .vfader::-moz-range-thumb     { width: 16px; height: 44px; }
       .vfader::-webkit-slider-runnable-track { height: 2px; }
       .vfader::-moz-range-track              { height: 2px; }
 
@@ -1929,17 +1910,17 @@ function initDials() {
     if (!canvas) return;
     drawDial(canvas, Math.round(S.tracks[idx].pan * 100));
 
-    let startY = null, startPan = null, lastTapTime = 0;
+    let startX = null, startY = null, startPan = null, lastTapTime = 0;
 
     canvas.addEventListener('pointerdown', e => {
       const now = Date.now();
       if (now - lastTapTime < 300) {
-        // Double-tap: reset to center
         setPan(idx, 0);
         lastTapTime = 0;
         return;
       }
       lastTapTime = now;
+      startX   = e.clientX;
       startY   = e.clientY;
       startPan = Math.round(S.tracks[idx].pan * 100);
       canvas.setPointerCapture(e.pointerId);
@@ -1948,15 +1929,16 @@ function initDials() {
 
     canvas.addEventListener('pointermove', e => {
       if (startY === null) return;
-      // Drag up = pan right (+), drag down = pan left (−)
+      // Drag up or right = pan right (+), drag down or left = pan left (−)
+      const dx     = e.clientX - startX;
       const dy     = startY - e.clientY;
-      const newPan = Math.max(-100, Math.min(100, startPan + dy));
+      const newPan = Math.max(-100, Math.min(100, startPan + dx + dy));
       setPan(idx, newPan);
       e.preventDefault();
     }, { passive: false });
 
-    canvas.addEventListener('pointerup',     () => { startY = null; startPan = null; });
-    canvas.addEventListener('pointercancel', () => { startY = null; startPan = null; });
+    canvas.addEventListener('pointerup',     () => { startX = null; startY = null; startPan = null; });
+    canvas.addEventListener('pointercancel', () => { startX = null; startY = null; startPan = null; });
   });
 }
 
