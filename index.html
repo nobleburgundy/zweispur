@@ -1021,7 +1021,7 @@ async function ensureMic() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: false,   // off: EC is for calls, destroys recording quality
+        echoCancellation: true,    // must stay true — iOS routes output to earpiece otherwise
         noiseSuppression: false,   // off: smears transients and tonal content
         autoGainControl:  false,   // off: causes pumping artifacts
         sampleRate:       { ideal: 48000 },  // iPhone native rate
