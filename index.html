@@ -1030,7 +1030,13 @@ async function ensureMic() {
   if (micStream) return;
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false },
+      audio: {
+        echoCancellation: false,   // off: EC is for calls, destroys recording quality
+        noiseSuppression: false,   // off: smears transients and tonal content
+        autoGainControl:  false,   // off: causes pumping artifacts
+        sampleRate:       { ideal: 48000 },  // iPhone native rate
+        channelCount:     { ideal: 1 },      // mic is mono; no need for stereo stream
+      },
       video: false
     });
   } catch (e) {
@@ -1106,7 +1112,10 @@ async function startRec(idx) {
   const mime = getMime();
   if (mime === null) { showErr('MEDIARECORDER NOT SUPPORTED — USE SAFARI 14.3+'); return; }
 
-  const mr = new MediaRecorder(micStream, mime ? { mimeType: mime } : {});
+  const mr = new MediaRecorder(micStream, {
+    ...(mime ? { mimeType: mime } : {}),
+    audioBitsPerSecond: 256000,   // 256kbps AAC — far above Safari's ~32kbps default
+  });
   S.recChunks = [];
   S.mr        = mr;
   S.recTrack  = idx;
@@ -1258,7 +1267,10 @@ async function calibrate() {
     const mime   = getMime();
     if (mime === null) { showErr('MEDIARECORDER NOT SUPPORTED'); return; }
 
-    const mr     = new MediaRecorder(micStream, mime ? { mimeType: mime } : {});
+    const mr     = new MediaRecorder(micStream, {
+      ...(mime ? { mimeType: mime } : {}),
+      audioBitsPerSecond: 256000,
+    });
     const chunks = [];
     mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
