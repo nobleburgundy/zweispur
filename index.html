@@ -661,6 +661,36 @@
       touch-action: none;
     }
 
+    /* ── GAIN TRIM ── */
+    .gain-section {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .gain-label {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text3);
+    }
+    .gain-val {
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      min-height: 18px;
+    }
+    .gain-dial {
+      display: block;
+      width: 48px;
+      height: 48px;
+      cursor: ns-resize;
+      touch-action: none;
+    }
+
     /* ── RESPONSIVE ── */
 
     /* iPad portrait and up (≥ 600px) */
@@ -704,6 +734,7 @@
       .vfader::-moz-range-track              { height: 2px; }
 
       .pan-dial    { width: 72px; height: 72px; }
+      .gain-dial   { width: 56px; height: 56px; }
       .mix-ch      { padding: 24px 20px 28px; gap: 14px; }
       .mix-ch-name { font-size: 12px; }
       .mix-db      { font-size: 17px; }
@@ -723,7 +754,8 @@
       .vfader-wrap  { width: 52px; height: 260px; }
       .vfader       { width: 260px; height: 52px; top: 104px; left: -104px; }
 
-      .pan-dial { width: 80px; height: 80px; }
+      .pan-dial  { width: 80px; height: 80px; }
+      .gain-dial { width: 64px; height: 64px; }
     }
 
     /* ── ERROR BANNER ── */
@@ -877,9 +909,14 @@
           <div class="mix-ch-name">TRACK A</div>
         </div>
         <div class="mix-db" id="mix-db-0">0.0 dB</div>
+        <div class="gain-section">
+          <div class="gain-label">GAIN</div>
+          <canvas class="gain-dial" id="gain-dial-0"></canvas>
+          <div class="gain-val" id="mix-gain-0">+0.0 dB</div>
+        </div>
         <div class="vfader-wrap">
           <input type="range" class="vfader" id="fader-0"
-                 min="0" max="100" value="100"
+                 min="0" max="100" value="75"
                  oninput="setVol(0, this.value)">
         </div>
         <div class="pan-section">
@@ -896,9 +933,14 @@
           <div class="mix-ch-name">TRACK B</div>
         </div>
         <div class="mix-db" id="mix-db-1">0.0 dB</div>
+        <div class="gain-section">
+          <div class="gain-label">GAIN</div>
+          <canvas class="gain-dial" id="gain-dial-1"></canvas>
+          <div class="gain-val" id="mix-gain-1">+0.0 dB</div>
+        </div>
         <div class="vfader-wrap">
           <input type="range" class="vfader" id="fader-1"
-                 min="0" max="100" value="100"
+                 min="0" max="100" value="75"
                  oninput="setVol(1, this.value)">
         </div>
         <div class="pan-section">
@@ -984,8 +1026,8 @@ const S = {
   armed:       [false, false],
   speedMode: null,   // null | 'half' | 'three4'
   tracks: [
-    { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
-    { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, pan: 0 },
+    { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, gain: 1.0, pan: 0 },
+    { buf: null, origBuf: null, src: null, gainNode: null, panNode: null, muted: false, dur: 0, vol: 1.0, gain: 1.0, pan: 0 },
   ],
   mr:          null,
   recTrack:    -1,
@@ -1477,7 +1519,7 @@ function playTrack(idx, atAcTime, offset) {
       t.gainNode.connect(AC.destination);
     }
   }
-  t.gainNode.gain.value = t.vol;
+  t.gainNode.gain.value = t.gain * t.vol;
   if (t.panNode) t.panNode.pan.value = t.pan;
 
   const src = AC.createBufferSource();
@@ -1711,7 +1753,7 @@ function clearTrack(idx) {
   const t = S.tracks[idx];
   if (t.gainNode) { try { t.gainNode.disconnect(); } catch(_) {} t.gainNode = null; }
   if (t.panNode)  { try { t.panNode.disconnect();  } catch(_) {} t.panNode  = null; }
-  t.buf = null; t.origBuf = null; t.dur = 0; t.muted = false; t.src = null; t.vol = 1.0; t.pan = 0;
+  t.buf = null; t.origBuf = null; t.dur = 0; t.muted = false; t.src = null; t.vol = 1.0; t.gain = 1.0; t.pan = 0;
   S.armed[idx] = false;
   document.getElementById('tl-' + idx).innerHTML = '';
   refreshTrack(idx);
@@ -1871,6 +1913,23 @@ function showErr(msg) {
   setTimeout(() => el.classList.remove('on'), 4000);
 }
 
+// ── FADER LAW ────────────────────────────────────────────────────────────────
+// pos 0–75  → power curve 0.0–1.0 (0 dB at pos 75)
+// pos 75–100 → linear gain 1.0–2.0 (+6 dB headroom)
+
+function faderToGain(pos) {
+  pos = +pos;
+  if (pos <= 0)  return 0;
+  if (pos <= 75) return Math.pow(pos / 75, 2);
+  return 1.0 + (pos - 75) / 25;
+}
+
+function gainToFader(gain) {
+  if (gain <= 0)  return 0;
+  if (gain <= 1.0) return 75 * Math.sqrt(gain);
+  return 75 + (gain - 1.0) * 25;
+}
+
 // ── MIXER ─────────────────────────────────────────────────────────────────────
 
 function toggleView() {
@@ -1884,8 +1943,8 @@ function toggleView() {
 
 function setVol(idx, value) {
   const t = S.tracks[idx];
-  t.vol   = value / 100;
-  if (t.gainNode) t.gainNode.gain.setTargetAtTime(t.vol, AC.currentTime, 0.01);
+  t.vol   = faderToGain(+value);
+  if (t.gainNode) t.gainNode.gain.setTargetAtTime(t.gain * t.vol, AC.currentTime, 0.01);
   updateVolUI(idx, value);
 }
 
@@ -1899,7 +1958,7 @@ function setPan(idx, value) {
 function updateVolUI(idx, value) {
   const fader    = document.getElementById('fader-' + idx);
   const dbEl     = document.getElementById('mix-db-' + idx);
-  const vol      = value / 100;
+  const vol      = faderToGain(+value);
   const isSilent = vol === 0;
   fader.style.setProperty('--fill', value);
   fader.classList.toggle('silent', isSilent);
@@ -1912,7 +1971,7 @@ function updatePanUI(idx, value) {
   const val = parseInt(value);
   el.textContent = val === 0 ? 'C' : (val < 0 ? 'L ' + Math.abs(val) : 'R ' + val);
   const canvas = document.getElementById('pan-dial-' + idx);
-  if (canvas) drawDial(canvas, val);
+  if (canvas) drawDial(canvas, val, 100);
 }
 
 // ── PAN DIAL (ROTARY CANVAS) ──────────────────────────────────────────────────
@@ -1921,8 +1980,9 @@ const DIAL_MIN_A = -Math.PI * 5 / 4;   // 7 o'clock
 const DIAL_MAX_A =  Math.PI / 4;        // 5 o'clock
 const DIAL_CTR_A = -Math.PI / 2;        // 12 o'clock (top)
 
-function drawDial(canvas, pan) {
-  // pan: integer -100 … +100
+function drawDial(canvas, value, range) {
+  // value: number within [-range, +range]; range defaults to 100 (pan dial)
+  if (range == null) range = 100;
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth  || 60;
   const H = canvas.offsetHeight || 60;
@@ -1936,8 +1996,8 @@ function drawDial(canvas, pan) {
 
   const cx = W / 2, cy = H / 2;
   const r  = Math.min(W, H) / 2 - 6;
-  const panNorm = pan / 100;                            // -1 … +1
-  const angle   = DIAL_CTR_A + panNorm * (Math.PI * 3 / 4);
+  const norm  = value / range;                          // -1 … +1
+  const angle = DIAL_CTR_A + norm * (Math.PI * 3 / 4);
 
   const st = getComputedStyle(document.documentElement);
   const border = st.getPropertyValue('--border').trim() || '#e0e0e0';
@@ -1953,9 +2013,9 @@ function drawDial(canvas, pan) {
   ctx.stroke();
 
   // Deviation arc from center to current angle
-  if (pan !== 0) {
+  if (value !== 0) {
     ctx.beginPath();
-    if (pan > 0) {
+    if (value > 0) {
       ctx.arc(cx, cy, r - 2, DIAL_CTR_A, angle);
     } else {
       ctx.arc(cx, cy, r - 2, angle, DIAL_CTR_A);
@@ -1977,7 +2037,7 @@ function drawDial(canvas, pan) {
   const indR = r - 7;
   ctx.beginPath();
   ctx.arc(cx + indR * Math.cos(angle), cy + indR * Math.sin(angle), 2.5, 0, Math.PI * 2);
-  ctx.fillStyle = pan === 0 ? text3 : text;
+  ctx.fillStyle = value === 0 ? text3 : text;
   ctx.fill();
 }
 
@@ -1985,7 +2045,7 @@ function initDials() {
   [0, 1].forEach(idx => {
     const canvas = document.getElementById('pan-dial-' + idx);
     if (!canvas) return;
-    drawDial(canvas, Math.round(S.tracks[idx].pan * 100));
+    drawDial(canvas, Math.round(S.tracks[idx].pan * 100), 100);
 
     let startX = null, startY = null, startPan = null, lastTapTime = 0;
 
@@ -2025,14 +2085,71 @@ function volToDb(vol) {
   return (db >= 0 ? '+' : '') + db.toFixed(1) + ' dB';
 }
 
+function setGain(idx, db) {
+  const t = S.tracks[idx];
+  db = Math.max(-12, Math.min(12, db));
+  t.gain = Math.pow(10, db / 20);
+  if (t.gainNode) t.gainNode.gain.setTargetAtTime(t.gain * t.vol, AC.currentTime, 0.01);
+  updateGainUI(idx, db);
+}
+
+function updateGainUI(idx, db) {
+  const el = document.getElementById('mix-gain-' + idx);
+  if (el) el.textContent = (db >= 0 ? '+' : '') + db.toFixed(1) + ' dB';
+  const canvas = document.getElementById('gain-dial-' + idx);
+  if (canvas) drawDial(canvas, db, 12);
+}
+
+function initGainDials() {
+  [0, 1].forEach(idx => {
+    const canvas = document.getElementById('gain-dial-' + idx);
+    if (!canvas) return;
+    const gainDb = 20 * Math.log10(Math.max(0.001, S.tracks[idx].gain));
+    drawDial(canvas, gainDb, 12);
+
+    let startX = null, startY = null, startDb = null, lastTapTime = 0;
+
+    canvas.addEventListener('pointerdown', e => {
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        setGain(idx, 0);
+        lastTapTime = 0;
+        return;
+      }
+      lastTapTime = now;
+      startX  = e.clientX;
+      startY  = e.clientY;
+      startDb = 20 * Math.log10(Math.max(0.001, S.tracks[idx].gain));
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('pointermove', e => {
+      if (startY === null) return;
+      const dx    = e.clientX - startX;
+      const dy    = startY - e.clientY;
+      const newDb = Math.max(-12, Math.min(12, startDb + (dx + dy) * 0.2));
+      setGain(idx, newDb);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('pointerup',     () => { startX = null; startY = null; startDb = null; });
+    canvas.addEventListener('pointercancel', () => { startX = null; startY = null; startDb = null; });
+  });
+}
+
 function syncMixerUI() {
   S.tracks.forEach((t, i) => {
-    const volVal = Math.round(t.vol * 100);
-    document.getElementById('fader-' + i).value = volVal;
-    updateVolUI(i, volVal);
+    const faderPos = Math.round(gainToFader(t.vol));
+    document.getElementById('fader-' + i).value = faderPos;
+    updateVolUI(i, faderPos);
+    const gainDb = 20 * Math.log10(Math.max(0.001, t.gain));
     // Force canvas resize on first reveal (was hidden, so offsetWidth was 0)
-    const canvas = document.getElementById('pan-dial-' + i);
-    if (canvas) { canvas.width = 0; canvas.height = 0; }
+    const gainCanvas = document.getElementById('gain-dial-' + i);
+    if (gainCanvas) { gainCanvas.width = 0; gainCanvas.height = 0; }
+    updateGainUI(i, gainDb);
+    const panCanvas = document.getElementById('pan-dial-' + i);
+    if (panCanvas) { panCanvas.width = 0; panCanvas.height = 0; }
     updatePanUI(i, Math.round(t.pan * 100));
   });
 }
@@ -2106,7 +2223,7 @@ async function shareMix() {
       const src = offCtx.createBufferSource();
       const g   = offCtx.createGain();
       src.buffer   = t.buf;
-      g.gain.value = t.muted ? 0 : t.vol;
+      g.gain.value = t.muted ? 0 : t.gain * t.vol;
       src.connect(g);
       if (offCtx.createStereoPanner) {
         const p   = offCtx.createStereoPanner();
@@ -2243,8 +2360,9 @@ if (!window.AudioContext && !window.webkitAudioContext) {
   showErr('WEB AUDIO NOT SUPPORTED — USE SAFARI 14.3+');
 }
 
-// Init pan dials
+// Init pan dials and gain dials
 initDials();
+initGainDials();
 
 // Hide BPM controls until METRO or COUNT-IN is active
 updateBpmVisibility();
