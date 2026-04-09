@@ -771,13 +771,16 @@
           <span class="tb-ico">●</span><span>ARM</span>
         </button>
         <button class="tb tb-off" id="tb-solo-0" onclick="soloTrack(0)">
-          <span class="tb-ico">▶</span><span>SOLO</span>
+          <span class="tb-ico">Ⓢ</span><span>SOLO</span>
         </button>
         <button class="tb tb-off" id="tb-mute-0" onclick="toggleMute(0)">
           <span class="tb-ico">◎</span><span>MUTE</span>
         </button>
         <button class="tb tb-off" id="tb-clr-0" onclick="clearTrack(0)">
           <span class="tb-ico">✕</span><span>CLR</span>
+        </button>
+        <button class="tb tb-off" id="tb-norm-0" onclick="normalizeTrack(0)">
+          <span class="tb-ico">↑</span><span>NORM</span>
         </button>
       </div>
     </div>
@@ -795,13 +798,16 @@
           <span class="tb-ico">●</span><span>ARM</span>
         </button>
         <button class="tb tb-off" id="tb-solo-1" onclick="soloTrack(1)">
-          <span class="tb-ico">▶</span><span>SOLO</span>
+          <span class="tb-ico">Ⓢ</span><span>SOLO</span>
         </button>
         <button class="tb tb-off" id="tb-mute-1" onclick="toggleMute(1)">
           <span class="tb-ico">◎</span><span>MUTE</span>
         </button>
         <button class="tb tb-off" id="tb-clr-1" onclick="clearTrack(1)">
           <span class="tb-ico">✕</span><span>CLR</span>
+        </button>
+        <button class="tb tb-off" id="tb-norm-1" onclick="normalizeTrack(1)">
+          <span class="tb-ico">↑</span><span>NORM</span>
         </button>
       </div>
     </div>
@@ -1667,6 +1673,39 @@ function toggleMute(idx) {
   refreshTrack(idx);
 }
 
+function normalizeTrack(idx) {
+  const t = S.tracks[idx];
+  if (!t.buf) return;
+
+  function normBuf(buf) {
+    let peak = 0;
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) {
+        const abs = Math.abs(data[i]);
+        if (abs > peak) peak = abs;
+      }
+    }
+    if (peak < 0.001) return;
+    const gain = 0.85 / peak;
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) data[i] *= gain;
+    }
+  }
+
+  normBuf(t.buf);
+  if (t.origBuf) normBuf(t.origBuf);
+
+  // Restart the source node so it plays from the updated buffer
+  if (S.isPlaying && !t.muted) {
+    const offset = Math.max(0, (AC.currentTime - S.globalStart) % t.dur);
+    killTrack(idx);
+    playTrack(idx, AC.currentTime, offset);
+  }
+  setStatus('TRACK ' + (idx === 0 ? 'A' : 'B') + ' NORMALIZED');
+}
+
 function clearTrack(idx) {
   killTrack(idx);
   const t = S.tracks[idx];
@@ -1757,6 +1796,7 @@ function refreshTrack(idx, override) {
   const soloBtn = document.getElementById('tb-solo-' + idx);
   const muteBtn = document.getElementById('tb-mute-' + idx);
   const clrBtn  = document.getElementById('tb-clr-' + idx);
+  const normBtn = document.getElementById('tb-norm-' + idx);
   const tlEl    = document.getElementById('tl-' + idx);
 
   // State label
@@ -1779,7 +1819,7 @@ function refreshTrack(idx, override) {
 
   // Audio-dependent buttons
   const has = !!t.buf;
-  [soloBtn, muteBtn, clrBtn].forEach(b => b.classList.toggle('tb-off', !has));
+  [soloBtn, muteBtn, clrBtn, normBtn].forEach(b => b.classList.toggle('tb-off', !has));
   if (has) {
     soloBtn.classList.toggle('tb-playing', !!t.src && !t.muted);
     muteBtn.classList.toggle('tb-muted', t.muted);
