@@ -19,7 +19,7 @@
       --accent: #1db954;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 
     html, body {
       height: 100%;
@@ -455,6 +455,8 @@
       letter-spacing: 0.04em;
       outline: none;
       -webkit-appearance: none;
+      user-select: text;
+      -webkit-user-select: text;
     }
     .fname-input:focus { border-bottom-color: var(--text); }
     .fname-actions {
@@ -960,6 +962,7 @@
 
 let AC = null;
 let micStream = null;
+let recStream = null;   // mic stream boosted through a Web Audio gain stage
 let clockRAF = null;
 
 const S = {
@@ -1021,6 +1024,17 @@ async function ensureMic() {
       },
       video: false
     });
+
+    // Disabling echoCancellation removes iOS's hidden ~9dB gain boost.
+    // Compensate by routing through a Web Audio gain stage before recording.
+    await ensureAC();
+    const src  = AC.createMediaStreamSource(micStream);
+    const gain = AC.createGain();
+    gain.gain.value = 3.0;   // +9.5 dB — restores level lost without EC processing
+    const dest = AC.createMediaStreamDestination();
+    src.connect(gain);
+    gain.connect(dest);
+    recStream = dest.stream;
   } catch (e) {
     showErr('MICROPHONE ACCESS DENIED');
     throw e;
@@ -1094,7 +1108,7 @@ async function startRec(idx) {
   const mime = getMime();
   if (mime === null) { showErr('MEDIARECORDER NOT SUPPORTED — USE SAFARI 14.3+'); return; }
 
-  const mr = new MediaRecorder(micStream, {
+  const mr = new MediaRecorder(recStream, {
     ...(mime ? { mimeType: mime } : {}),
     audioBitsPerSecond: 256000,   // 256kbps AAC — far above Safari's ~32kbps default
   });
@@ -1339,7 +1353,7 @@ async function calibrate() {
     const mime   = getMime();
     if (mime === null) { showErr('MEDIARECORDER NOT SUPPORTED'); return; }
 
-    const mr     = new MediaRecorder(micStream, {
+    const mr     = new MediaRecorder(recStream, {
       ...(mime ? { mimeType: mime } : {}),
       audioBitsPerSecond: 256000,
     });
