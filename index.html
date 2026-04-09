@@ -655,49 +655,12 @@
       color: var(--text);
       min-height: 18px;
     }
-    /* Center tick mark above pan slider */
-    .pan-wrap {
-      position: relative;
-      width: 100%;
-    }
-    .pan-wrap::before {
-      content: '';
-      position: absolute;
-      top: -5px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 1px;
-      height: 4px;
-      background: var(--text3);
-      pointer-events: none;
-    }
-    .pan-slider {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 2px;
-      background: var(--border);
-      outline: none;
-      cursor: pointer;
-      border-radius: 0;
+    .pan-dial {
       display: block;
-    }
-    .pan-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 12px;
-      height: 26px;
-      background: var(--text2);
-      border-radius: 0;
-      cursor: pointer;
-      margin-top: -12px;
-    }
-    .pan-slider::-moz-range-thumb {
-      width: 12px;
-      height: 26px;
-      background: var(--text2);
-      border-radius: 0;
-      border: none;
-      cursor: pointer;
+      width: 60px;
+      height: 60px;
+      cursor: ns-resize;
+      touch-action: none;
     }
 
     /* ── ERROR BANNER ── */
@@ -820,7 +783,7 @@
 
       <div class="cal-row">
         <span class="cal-label">OFFSET</span>
-        <span class="cal-offset unset" id="cal-offset-disp">— ms</span>
+        <span class="cal-offset" id="cal-offset-disp">77 ms</span>
         <button class="cal-btn" onclick="adjOffset(-5)">−5ms</button>
         <button class="cal-btn" onclick="adjOffset(5)">+5ms</button>
         <button class="cal-btn" id="cal-auto-btn" onclick="calibrate()">AUTO</button>
@@ -848,11 +811,7 @@
         <div class="pan-section">
           <div class="pan-label">PAN</div>
           <div class="pan-val" id="mix-pan-0">C</div>
-          <div class="pan-wrap">
-            <input type="range" class="pan-slider" id="pan-0"
-                   min="-100" max="100" step="5" value="0"
-                   oninput="setPan(0, this.value)">
-          </div>
+          <canvas class="pan-dial" id="pan-dial-0"></canvas>
         </div>
       </div>
 
@@ -871,11 +830,7 @@
         <div class="pan-section">
           <div class="pan-label">PAN</div>
           <div class="pan-val" id="mix-pan-1">C</div>
-          <div class="pan-wrap">
-            <input type="range" class="pan-slider" id="pan-1"
-                   min="-100" max="100" step="5" value="0"
-                   oninput="setPan(1, this.value)">
-          </div>
+          <canvas class="pan-dial" id="pan-dial-1"></canvas>
         </div>
       </div>
 
@@ -967,8 +922,8 @@ const S = {
   taps:           [],
   lastTap:        0,
   // latency compensation
-  latencyOffset:  0,      // seconds to trim from overdub recordings
-  latencySet:     false,  // whether user has calibrated or nudged
+  latencyOffset:  0.077,  // seconds to trim from overdub recordings
+  latencySet:     true,   // whether user has calibrated or nudged
   recHasPlayback: false,  // whether other tracks were playing during last record
   isCalibrating:  false,
 };
@@ -1703,6 +1658,111 @@ function updatePanUI(idx, value) {
   const el  = document.getElementById('mix-pan-' + idx);
   const val = parseInt(value);
   el.textContent = val === 0 ? 'C' : (val < 0 ? 'L ' + Math.abs(val) : 'R ' + val);
+  const canvas = document.getElementById('pan-dial-' + idx);
+  if (canvas) drawDial(canvas, val);
+}
+
+// ── PAN DIAL (ROTARY CANVAS) ──────────────────────────────────────────────────
+
+const DIAL_MIN_A = -Math.PI * 5 / 4;   // 7 o'clock
+const DIAL_MAX_A =  Math.PI / 4;        // 5 o'clock
+const DIAL_CTR_A = -Math.PI / 2;        // 12 o'clock (top)
+
+function drawDial(canvas, pan) {
+  // pan: integer -100 … +100
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth  || 60;
+  const H = canvas.offsetHeight || 60;
+  if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+  const r  = Math.min(W, H) / 2 - 6;
+  const panNorm = pan / 100;                            // -1 … +1
+  const angle   = DIAL_CTR_A + panNorm * (Math.PI * 3 / 4);
+
+  const st = getComputedStyle(document.documentElement);
+  const border = st.getPropertyValue('--border').trim() || '#e0e0e0';
+  const text   = st.getPropertyValue('--text').trim()   || '#111111';
+  const text2  = st.getPropertyValue('--text2').trim()  || '#666666';
+  const text3  = st.getPropertyValue('--text3').trim()  || '#bbbbbb';
+
+  // Travel arc (background)
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 2, DIAL_MIN_A, DIAL_MAX_A);
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Deviation arc from center to current angle
+  if (pan !== 0) {
+    ctx.beginPath();
+    if (pan > 0) {
+      ctx.arc(cx, cy, r - 2, DIAL_CTR_A, angle);
+    } else {
+      ctx.arc(cx, cy, r - 2, angle, DIAL_CTR_A);
+    }
+    ctx.strokeStyle = text2;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Center detent tick at 12 o'clock
+  ctx.beginPath();
+  ctx.moveTo(cx + (r - 7) * Math.cos(DIAL_CTR_A), cy + (r - 7) * Math.sin(DIAL_CTR_A));
+  ctx.lineTo(cx + (r - 2) * Math.cos(DIAL_CTR_A), cy + (r - 2) * Math.sin(DIAL_CTR_A));
+  ctx.strokeStyle = text3;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Indicator dot
+  const indR = r - 7;
+  ctx.beginPath();
+  ctx.arc(cx + indR * Math.cos(angle), cy + indR * Math.sin(angle), 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = pan === 0 ? text3 : text;
+  ctx.fill();
+}
+
+function initDials() {
+  [0, 1].forEach(idx => {
+    const canvas = document.getElementById('pan-dial-' + idx);
+    if (!canvas) return;
+    drawDial(canvas, Math.round(S.tracks[idx].pan * 100));
+
+    let startY = null, startPan = null, lastTapTime = 0;
+
+    canvas.addEventListener('pointerdown', e => {
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        // Double-tap: reset to center
+        setPan(idx, 0);
+        lastTapTime = 0;
+        return;
+      }
+      lastTapTime = now;
+      startY   = e.clientY;
+      startPan = Math.round(S.tracks[idx].pan * 100);
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('pointermove', e => {
+      if (startY === null) return;
+      // Drag up = pan right (+), drag down = pan left (−)
+      const dy     = startY - e.clientY;
+      const newPan = Math.max(-100, Math.min(100, startPan + dy));
+      setPan(idx, newPan);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('pointerup',     () => { startY = null; startPan = null; });
+    canvas.addEventListener('pointercancel', () => { startY = null; startPan = null; });
+  });
 }
 
 function volToDb(vol) {
@@ -1716,9 +1776,10 @@ function syncMixerUI() {
     const volVal = Math.round(t.vol * 100);
     document.getElementById('fader-' + i).value = volVal;
     updateVolUI(i, volVal);
-    const panVal = Math.round(t.pan * 100);
-    document.getElementById('pan-' + i).value = panVal;
-    updatePanUI(i, panVal);
+    // Force canvas resize on first reveal (was hidden, so offsetWidth was 0)
+    const canvas = document.getElementById('pan-dial-' + i);
+    if (canvas) { canvas.width = 0; canvas.height = 0; }
+    updatePanUI(i, Math.round(t.pan * 100));
   });
 }
 
@@ -1927,6 +1988,9 @@ S.loopLen = calcLoopLen();
 if (!window.AudioContext && !window.webkitAudioContext) {
   showErr('WEB AUDIO NOT SUPPORTED — USE SAFARI 14.3+');
 }
+
+// Init pan dials
+initDials();
 
 // Inject home screen & favicon icons
 (function () {
