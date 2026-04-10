@@ -1010,6 +1010,7 @@
 
 let AC = null;
 let micStream = null;
+let micEC = null;   // tracks current echoCancellation state of micStream
 let clockRAF = null;
 
 const S = {
@@ -1058,24 +1059,36 @@ async function ensureAC() {
   if (AC.state === 'suspended') await AC.resume();
 }
 
-async function ensureMic() {
-  if (micStream) return;
+async function acquireMic(ec) {
+  // Re-use existing stream if it already has the right EC setting
+  if (micStream && micEC === ec) return;
+  // Release the old stream first
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+    micEC = null;
+  }
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: true,    // must stay true — iOS routes output to earpiece otherwise
+        echoCancellation: ec,
         noiseSuppression: false,   // off: smears transients and tonal content
         autoGainControl:  false,   // off: causes pumping artifacts
-        sampleRate:       { ideal: 48000 },  // iPhone native rate
-        channelCount:     { ideal: 1 },      // mic is mono; no need for stereo stream
+        sampleRate:       { ideal: 48000 },
+        channelCount:     { ideal: 1 },
       },
       video: false
     });
-
+    micEC = ec;
   } catch (e) {
     showErr('MICROPHONE ACCESS DENIED');
     throw e;
   }
+}
+
+async function ensureMic() {
+  // EC:true for speaker routing during playback/idle
+  await acquireMic(true);
 }
 
 // ── METRONOME ────────────────────────────────────────────────────────────────
@@ -1164,7 +1177,8 @@ function getMime() {
 }
 
 async function startRec(idx) {
-  await ensureMic();
+  // Track A: EC off for clean capture. Track B: EC on to keep speaker routing during overdub.
+  await acquireMic(idx === 0 ? false : true);
   const mime = getMime();
   if (mime === null) { showErr('MEDIARECORDER NOT SUPPORTED — USE SAFARI 14.3+'); return; }
 
@@ -1617,6 +1631,7 @@ async function handlePlay() {
   if (S.isPlaying) return;
   try {
     await ensureAC();
+    await acquireMic(true);   // ensure speaker routing before playback starts
     S.loopLen     = calcLoopLen();
     S.globalStart = AC.currentTime;
     S.isPlaying   = true;
@@ -1639,6 +1654,8 @@ function handleStop() {
   refreshTransport();
   S.tracks.forEach((_, i) => refreshTrack(i));
   setStatus('STOPPED');
+  // Restore EC:true in background so speaker routing is ready for next playback
+  acquireMic(true).catch(() => {});
 }
 
 function toggleLoop() {
